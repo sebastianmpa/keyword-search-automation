@@ -1,0 +1,6 @@
+selenium
+pyautogui
+pandas
+openpyxl
+requests
+tk
