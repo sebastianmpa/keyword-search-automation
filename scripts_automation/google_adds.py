@@ -22,64 +22,68 @@ def iniciar_driver():
     driver = webdriver.Chrome(options=chrome_options)
     wait = WebDriverWait(driver, 60)  
     return driver, wait
-#PASO TRES 
-# ✅ INICIO DE SESIÓN EN GOOGLE ADS
-def iniciar_sesion(driver, wait, email, password):
-    driver.get("https://accounts.google.com/v3/signin/identifier?service=adwords&flowName=GlifWebSignIn&flowEntry=ServiceLogin")
-    
-    email_field = wait.until(EC.presence_of_element_located((By.ID, "identifierId")))
-    email_field.send_keys(email)
-    email_field.send_keys(Keys.RETURN)
-    time.sleep(5)  
-    
-    password_field = wait.until(EC.presence_of_element_located((By.NAME, "Passwd")))
-    password_field.send_keys(password)
-    password_field.send_keys(Keys.RETURN)
-
-    print("✅ Inicio de sesión exitoso.")
-    time.sleep(5)
-#PASO CUATRO
-# ✅ SELECCIONAR CUENTA EN GOOGLE ADS
-def seleccionar_cuenta(driver, wait, account_number):
-    # Guardar la ventana actual antes de abrir la nueva
-    ventana_anterior = driver.current_window_handle
-
-    # Abrir Google Ads en una nueva pestaña
-    driver.execute_script("window.open('https://ads.google.com/aw/campaigns', '_blank');")
-    # Cambiar a la nueva pestaña
-    driver.switch_to.window(driver.window_handles[1])
-    print("✅ Se abrió Google Ads en una nueva pestaña correctamente.")
-
-    # Cerrar la pestaña anterior
-    driver.switch_to.window(ventana_anterior)
-    driver.close()
-    print("❎ Se cerró la pestaña anterior.")
-
-    driver.switch_to.window(driver.window_handles[0])
-
-    try:
-        account_span = wait.until(EC.element_to_be_clickable((By.XPATH, f"//span[normalize-space()='{account_number}']")))
-        account_span.click()
-        print(f"✅ Se seleccionó la cuenta {account_number} correctamente.")
-    except Exception as e:
-        print(f"❌ No se pudo seleccionar la cuenta {account_number}: {e}")
 
 
-# ✅ IR A KEYWORD PLANNER
 def ir_a_keyword_planner(driver, wait):
     try:
+        # Paso 1: Click en Tools
         tools_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[normalize-space()='Tools']")))
         tools_button.click()
         print("✅ Se hizo clic en 'Tools'.")
+        time.sleep(1)
     except Exception as e:
         print(f"❌ No se pudo hacer clic en 'Tools': {e}")
+        return
 
     try:
+        # Paso 2: Expandir Planning usando el nuevo selector
+        planning_expand = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[normalize-space()='Planning']")))
+        planning_expand.click()
+        print("✅ Se expandió 'Planning'.")
+        time.sleep(1)
+    except Exception as e:
+        print(f"❌ No se pudo expandir 'Planning': {e}")
+        return
+
+    try:
+        # Paso 3: Click en Keyword Planner
+        keyword_planner_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[normalize-space()='Keyword Planner']")))
+        keyword_planner_btn.click()
+        print("✅ Se hizo clic en 'Keyword Planner'.")
+        time.sleep(1)
+    except Exception as e:
+        print(f"❌ No se pudo hacer clic en 'Keyword Planner': {e}")
+        return
+
+    try:
+        # Paso 4: Click en Discover new keywords
         discover_keywords_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[normalize-space()='Discover new keywords']")))
         discover_keywords_button.click()
         print("✅ Se hizo clic en 'Discover new keywords'.")
     except Exception as e:
         print(f"❌ No se pudo hacer clic en 'Discover new keywords': {e}")
+
+
+
+def ir_a_keyword_planner2(driver, wait):
+    try:
+        # Paso 3: Click en Keyword Planner
+        keyword_planner_btn = wait.until(EC.element_to_be_clickable((By.XPATH, "//div[normalize-space()='Keyword Planner']")))
+        keyword_planner_btn.click()
+        print("✅ Se hizo clic en 'Keyword Planner'.")
+        time.sleep(1)
+    except Exception as e:
+        print(f"❌ No se pudo hacer clic en 'Keyword Planner': {e}")
+        return
+
+    try:
+        # Paso 4: Click en Discover new keywords
+        discover_keywords_button = wait.until(EC.element_to_be_clickable((By.XPATH, "//span[normalize-space()='Discover new keywords']")))
+        discover_keywords_button.click()
+        print("✅ Se hizo clic en 'Discover new keywords'.")
+    except Exception as e:
+        print(f"❌ No se pudo hacer clic en 'Discover new keywords': {e}")
+
 
 # ✅ AGREGAR PALABRAS CLAVE EN EL INPUT DEL KEYWORD PLANNER
 def agregar_keywords(driver, wait, keywords):
@@ -202,9 +206,11 @@ def login_automation_with_cookies(cookie_file=None):
 
 def login_automation(cookie_file=None):
     """
-    Login automático usando cookies generados previamente.
+    Login automático usando cookies generados previamente y navega al Keyword Planner.
     """
-    return login_automation_with_cookies(cookie_file)
+    driver, wait = login_automation_with_cookies(cookie_file)
+    ir_a_keyword_planner(driver, wait)
+    return driver, wait
 
 
 
@@ -217,7 +223,7 @@ def keyword_planner_automation(driver, wait, keywords, url=None):
     - Descarga los datos
     """
     time.sleep(5)
-    ir_a_keyword_planner(driver, wait)
+    ir_a_keyword_planner2(driver, wait)
     # Agregar keywords
     agregar_keywords(driver, wait, keywords)
 
@@ -233,5 +239,5 @@ def keyword_planner_automation(driver, wait, keywords, url=None):
 
 if __name__ == "__main__":
     driver, wait = login_automation()
-    ir_a_keyword_planner(driver, wait)
+    ir_a_keyword_planner2(driver, wait)
     cerrar_navegador(driver)

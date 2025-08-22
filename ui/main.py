@@ -65,8 +65,10 @@ def iniciar_automatizacion():
         keyword_planner_automation(driver, wait, [keyword_row], url if url else None)
 
         # 🔹 Generar el JSON en memoria y pasarlo directamente a la API sin guardarlo
-        time.sleep(5)  # Esperar a que se complete la descarga
-        json_data = merge_csv_files(1, destination_folder, "Keyword_Volumen", return_json=True)
+        # Usa solo la primera palabra de la keyword como nombre de archivo (sin caracteres especiales)
+        import re
+        keyword_name = re.sub(r'[^\w\s-]', '', keyword_row.split(',')[0]).strip().replace(' ', '_')
+        json_data = merge_csv_files(1, destination_folder, keyword_name, return_json=True)
         
         if ai_suggestion_var.get() and json_data:
             print(f"🔹 AI keyword suggestion enabled for '{keyword_row}' - Calling API...")
@@ -76,7 +78,7 @@ def iniciar_automatizacion():
         processed_keywords += 1
 
     if consolidated_var.get():
-        merge_csv_files(num_files, destination_folder, "consolidated_keywords")
+        merge_csv_files(num_files, destination_folder, "consolidado")
 
     # 🔹 Cerrar el navegador solo al final del proceso
     cerrar_navegador(driver)
