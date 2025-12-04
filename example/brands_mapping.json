@@ -1,0 +1,54 @@
+{
+  "brands_mapping": [
+    {
+      "store_id": 3,
+      "brand_api": "Briggs & Stratton",
+      "brand_db": "BRIGGS & STRATTON"
+    },
+    {
+      "store_id": 1,
+      "brand_api": "Echo / Shindaiwa", 
+      "brand_db": "ECHO"
+    },
+    {
+      "store_id": 10,
+      "brand_api": "Husqvarna Power Equipment",
+      "brand_db": "HUSQVARNA"
+    },
+    {
+      "store_id": 190,
+      "brand_api": "Kawasaki Engine",
+      "brand_db": ""
+    },
+    {
+      "store_id": 109,
+      "brand_api": "Rehlko Engines",
+      "brand_db": ""
+    },
+    {
+      "store_id": 7,
+      "brand_api": "Scag Power Equipment",
+      "brand_db": "SCAG"
+    },
+    {
+      "store_id": 1002,
+      "brand_api": "Snapper",
+      "brand_db": ""
+    },
+    {
+      "store_id": 1001,
+      "brand_api": "Snapper Pro",
+      "brand_db": ""
+    },
+    {
+      "store_id": 100,
+      "brand_api": "Stihl",
+      "brand_db": ""
+    },
+    {
+      "store_id": 32,
+      "brand_api": "Toro Consumer",
+      "brand_db": "TORO"
+    }
+  ]
+}

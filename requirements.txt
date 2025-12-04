@@ -4,3 +4,7 @@ pandas
 openpyxl
 requests
 tk
+pymongo
+mysql-connector-python
+pydantic-settings
+python-dotenv
