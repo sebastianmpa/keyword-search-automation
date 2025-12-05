@@ -1,219 +1,174 @@
 import sys
 import os
+import json
 import pandas as pd
 from datetime import datetime
 import time
-import openpyxl
-# Agregar el directorio raíz al sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from db.get_stores import get_stores
+from db.get_all_products import get_available_products_batch
+from rest_consumer.where_used_api import consume_where_used
+from scripts_automation.generate_convinations import generate_combinations
+from db.insert_model_keyword import insert_model_keyword
 from scripts_automation.google_adds import keyword_planner_automation, login_automation, cerrar_navegador
 from scripts_automation.merge_csv import merge_csv_files
-from rest_consumer.keyword_planner import consume_generate_keywords,  consume_generate_complementary_keywords
-# Definir la ruta fija para guardar los archivos
 
-def cargar_keywords():
-    file_path = filedialog.askopenfilename(filetypes=[("Excel Files", "*.xlsx")])
-    if file_path:
-        try:
-            df = pd.read_excel(file_path)
-            # Convertir filas a formato de keyword con variantes separadas por coma
-            keywords = df.apply(lambda row: ", ".join(row.dropna().astype(str)), axis=1).tolist()
+# Cargar brands mapping
+with open(os.path.join(os.path.dirname(__file__), "..", "example", "brands_mapping.json"), "r", encoding="utf-8") as f:
+    brands_mapping = json.load(f)["brands_mapping"]
 
-            # Insertar los datos en el campo de texto
-            entry_keywords.delete("1.0", tk.END)
-            entry_keywords.insert("1.0", "\n".join(keywords))
+def get_brand_api(store_id):
+    for b in brands_mapping:
+        if b.get("store_id") == store_id:
+            return b.get("brand_api", "")
+    return ""
 
-            messagebox.showinfo("Carga exitosa", "Keywords cargadas correctamente desde el archivo.")
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo cargar el archivo: {e}")
+def get_brand_db(store_id):
+    for b in brands_mapping:
+        if b.get("store_id") == store_id:
+            return b.get("brand_db", "")
+    return ""
 
 def iniciar_automatizacion():
-    keywords = entry_keywords.get("1.0", tk.END).strip().split("\n")
-    url = entry_url.get().strip()
-    num_files = len(keywords)
-
-    if not keywords or keywords == ['']:
-        messagebox.showwarning("Campos incompletos", "Debe ingresar al menos una palabra clave.")
+    selected_desc = combo_store.get()
+    if not selected_desc or selected_desc not in store_id_map:
+        messagebox.showwarning("Error", "Debe seleccionar una tienda válida.")
         return
-
+    store_id = int(store_id_map[selected_desc])
     destination_folder = entry_carpeta_destino.get().strip()
     if not destination_folder:
         messagebox.showwarning("Error", "Debe seleccionar una carpeta para guardar los archivos.")
         return
 
     messagebox.showinfo("Automatización iniciada", "El proceso ha comenzado. Revisa la terminal para detalles.")
-
-    # Capturar el tiempo de inicio
     start_time = time.time()
-
-    # 🔹 Iniciar sesión y abrir el Keyword Planner solo una vez
-    driver, wait = login_automation()  # Guardamos el driver y wait para reusarlos
-
     processed_keywords = 0
 
-    for keyword_row in keywords:
-        if ',' not in keyword_row:
-            response = consume_generate_complementary_keywords(keyword_row.strip())
-            if "error" in response:
-                print(f"⚠️ Error al generar variantes con IA para '{keyword_row}': {response['error']}")
-                continue
-            keyword_row = f"{response['Keyword']}, {', '.join(response['Variations'])}"
+    # Iniciar sesión en Google Ads Keyword Planner
+    print("🔹 Iniciando sesión en Google Ads Keyword Planner...")
+    driver, wait = login_automation()
+    print("✅ Sesión iniciada correctamente")
 
-        # 🔹 Llamamos correctamente `keyword_planner_automation` pasando driver y wait
-        keyword_planner_automation(driver, wait, [keyword_row], url if url else None)
-
-        # 🔹 Generar el JSON en memoria y pasarlo directamente a la API sin guardarlo
-        # Usa solo la primera palabra de la keyword como nombre de archivo (sin caracteres especiales)
-        import re
-        keyword_name = re.sub(r'[^\w\s-]', '', keyword_row.split(',')[0]).strip().replace(' ', '_')
-        json_data = merge_csv_files(1, destination_folder, keyword_name, return_json=True)
+    # Traer productos filtrados y realizar keyword research
+    print(f"🔹 Consultando productos para store_id: {store_id}")
+    product_count = 0
+    for product in get_available_products_batch(store_id):
+        product_count += 1
+        print(f"\n📦 Producto #{product_count}")
         
-        if ai_suggestion_var.get() and json_data:
-            print(f"🔹 AI keyword suggestion enabled for '{keyword_row}' - Calling API...")
-            result = consume_generate_keywords(json_data, destination_folder)
-            print("🔹 AI Response:", result)
+        sku = product.get("SKU")
+        store_id_prod = product.get("STOREID")
+        
+        print(f"   SKU: {sku}, Store ID: {store_id_prod}")
+        
+        if not sku:
+            print(f"   ⚠️ Producto omitido - falta SKU")
+            continue
 
-        processed_keywords += 1
+        brand_api = get_brand_api(store_id_prod)
+        brand_db = get_brand_db(store_id_prod)
+        print(f"   Brand API: {brand_api}, Brand DB: {brand_db}")
+        
+        if not brand_api or not brand_db:
+            print(f"   ⚠️ Producto omitido - no se encontró brand mapping")
+            continue
 
-    if consolidated_var.get():
-        merge_csv_files(num_files, destination_folder, "consolidado")
+        # Consultar API externa
+        print(f"   🌐 Consultando API where_used para SKU: {sku}, Brand: {brand_api}")
+        api_response = consume_where_used(sku, brand_api)
+        print(f"   📡 Respuesta API: {type(api_response)}")
+        
+        if not isinstance(api_response, list) or not api_response or not isinstance(api_response[0], list):
+            print(f"   ⚠️ Respuesta API inválida o vacía")
+            continue
 
-    # 🔹 Cerrar el navegador solo al final del proceso
+        print(f"   ✅ API response válida, procesando {len(api_response[0])} items")
+        for idx, item in enumerate(api_response[0]):
+            print(f"\n   🔹 Item #{idx + 1}: SKU={item.get('sku')}, Model={item.get('model')}, Part Type={item.get('part_type')}")
+            
+            # Generar combinaciones usando brand_db
+            keywords = generate_combinations(
+                item.get("part_type", ""),
+                brand_db,
+                item.get("model", ""),
+                item.get("sku", "")
+            )
+            print(f"   🔑 Keywords generadas: {keywords}")
+            
+            # Realizar keyword research en Google Ads y obtener resultado en memoria
+            print(f"   🚀 Ejecutando keyword research para {len(keywords)} keywords...")
+            result_json = keyword_planner_automation(driver, wait, keywords)
+            print(f"   📊 Resultado keyword research: {type(result_json)}")
+            
+            # Insertar en BD inmediatamente con los datos del keyword research
+            if isinstance(result_json, list):
+                print(f"   💾 Insertando {len(result_json)} keywords en BD...")
+                for kw_data in result_json:
+                    doc = {
+                        "brand": brand_db,
+                        "sku": item.get("sku", ""),
+                        "model": item.get("model", ""),
+                        "part_type": item.get("part_type", ""),
+                        "keyword": kw_data.get("Keyword", ""),
+                        "volume": kw_data.get("Avg_monthly_searches", 0)
+                    }
+                    insert_model_keyword(doc)
+                    processed_keywords += 1
+                print(f"   ✅ Keywords insertadas. Total procesadas: {processed_keywords}")
+            else:
+                print(f"   ⚠️ result_json no es una lista, se omite inserción")
+    
+    print(f"\n🏁 Loop de productos completado. Total productos procesados: {product_count}")
     cerrar_navegador(driver)
-    print("🚪 Navegador cerrado después de completar todas las iteraciones.")
 
-    # Capturar el tiempo de fin
     end_time = time.time()
     elapsed_time = end_time - start_time
-
-    # Convertir el tiempo transcurrido a horas, minutos y segundos
     hours, rem = divmod(elapsed_time, 3600)
     minutes, seconds = divmod(rem, 60)
-
-    # Mostrar alerta con el tiempo transcurrido y la cantidad de keywords procesadas
     messagebox.showinfo("Automatización completada", f"Se procesaron {processed_keywords} keywords en {int(hours)} horas, {int(minutes)} minutos y {int(seconds)} segundos.")
 
-
-
-
-def descargar_template():
-    """Permite al usuario descargar el archivo de ejemplo Keywords.xlsx"""
-    # Se obtiene el directorio padre (donde se encuentra 'example')
-    directorio_padre = os.path.dirname(os.path.dirname(__file__))
-    ruta_origen = os.path.join(directorio_padre, "example", "Keywords.xlsx")
-
-    if not os.path.exists(ruta_origen):
-        messagebox.showerror("Error", "No se encontró el archivo de plantilla.")
-        return
-
-    ruta_destino = filedialog.asksaveasfilename(
-        defaultextension=".xlsx",
-        filetypes=[("Excel Files", "*.xlsx")],
-        title="Guardar plantilla como"
-    )
-
-    if ruta_destino:
-        try:
-            import shutil
-            shutil.copy(ruta_origen, ruta_destino)
-            messagebox.showinfo("Descarga exitosa", f"Plantilla guardada en: {ruta_destino}")
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo guardar el archivo: {e}")
-
 def seleccionar_carpeta_destino():
-    """ Abre un cuadro de diálogo para que el usuario elija la carpeta donde guardar los archivos fusionados """
     folder_selected = filedialog.askdirectory(title="Selecciona una carpeta para guardar los archivos fusionados")
     if folder_selected:
         entry_carpeta_destino.delete(0, tk.END)
         entry_carpeta_destino.insert(0, folder_selected)
 
-def cerrar_aplicacion():
-    root.destroy()
-
 # Configuración de la ventana principal
 root = tk.Tk()
-root.title("Automatización Google Ads")
-root.geometry("950x950")
+root.title("Automatización Model Keywords")
+root.geometry("700x400")
 root.resizable(False, False)
-root.configure(bg="#F8F9FA")  # Fondo gris claro
+root.configure(bg="#F8F9FA")
 
-# Estilos
-style = ttk.Style()
-style.configure("TFrame", background="#F8F9FA")  # Fondo gris claro
-style.configure("TLabel", font=("Arial", 12, "bold"), background="#F8F9FA", foreground="#0D47A1")  # Texto azul oscuro
-style.configure("Rounded.TButton", font=("Arial", 12, "bold"), background="#1565C0", foreground="white", padding=10, relief="raised", borderwidth=2)
-style.map("Rounded.TButton", background=[("active", "#0D47A1")])
-
-# Encabezado
-header = ttk.Frame(root, style="TFrame", padding=10)
-header.pack(fill="x")
-
-ttk.Label(header, text="🤖 Keyword Planner", font=("Arial", 16, "bold"), style="TLabel").pack(side="left")
-ttk.Label(header, text=datetime.now().strftime('%B %d, %Y %I:%M %p'), font=("Arial", 12), background="#F8F9FA").pack(side="right")
-
-# Contenedor principal
-main_frame = ttk.Frame(root, padding=20, style="TFrame")
+main_frame = ttk.Frame(root, padding=20)
 main_frame.pack(fill="both", expand=True)
 
-# Sección de Automatización de Google Ads
-google_ads_frame = ttk.LabelFrame(main_frame, text="Automation Google Ads", padding=20)
-google_ads_frame.pack(fill="both", expand=True, padx=10, pady=10)
+# Selector de tienda
+ttk.Label(main_frame, text="Selecciona la tienda:", font=("Arial", 12, "bold")).pack(anchor="w", pady=5)
+stores = get_stores()
+store_options = [s["description"] for s in stores if "description" in s and "id" in s]
+store_id_map = {s["description"]: s["id"] for s in stores if "description" in s and "id" in s}
+combo_store = ttk.Combobox(main_frame, values=store_options, state="readonly", width=30)
+combo_store.pack(pady=5)
+if store_options:
+    combo_store.set(store_options[0])
 
-ttk.Label(google_ads_frame, text="Keywords (One line each group):", style="TLabel").pack(anchor="w", pady=5)
-entry_keywords = tk.Text(google_ads_frame, height=5, width=50, font=("Arial", 12), relief="solid", borderwidth=2, bg="#ffffff", fg="#333333")
-entry_keywords.pack(fill="x", pady=5)
-
-# Crear un frame para los botones
-button_frame = ttk.Frame(google_ads_frame, style="TFrame")
-button_frame.pack(pady=5)
-
-btn_cargar = tk.Button(button_frame, text="💾 Upload", command=cargar_keywords, font=("Arial", 12, "bold"),
-                       bg="#1565C0", fg="white", activebackground="#0D47A1", activeforeground="white",
-                       relief="raised", padx=10, pady=5, borderwidth=2)
-btn_cargar.pack(side="left", padx=5)
-
-
-
-
-btn_descargar = tk.Button(google_ads_frame, text="⬇ Download Template", command=descargar_template,
-                          font=("Arial", 12, "bold"), bg="white", fg="#1565C0", activebackground="#E3F2FD",
-                          activeforeground="#1565C0", relief="flat", padx=10, pady=5, borderwidth=0)
-btn_descargar.pack(pady=5)
-
-
-
-
-ttk.Label(google_ads_frame, text="🌍 URL (Optional):", style="TLabel").pack(anchor="w", pady=5)
-entry_url = ttk.Entry(google_ads_frame, width=50, font=("Arial", 12))
-entry_url.pack(fill="x", pady=5)
-
-# Checkboxes
-checkbox_frame = ttk.Frame(google_ads_frame, style="TFrame")
-checkbox_frame.pack(fill="x", pady=10)
-
-ai_suggestion_var = tk.BooleanVar()
-consolidated_var = tk.BooleanVar()
-
-ttk.Label(google_ads_frame, text="📁 Destination folder:", style="TLabel").pack(anchor="w", pady=5)
-entry_carpeta_destino = ttk.Entry(google_ads_frame, width=50, font=("Arial", 12))
+ttk.Label(main_frame, text="📁 Destination folder:", font=("Arial", 12, "bold")).pack(anchor="w", pady=5)
+entry_carpeta_destino = ttk.Entry(main_frame, width=50, font=("Arial", 12))
 entry_carpeta_destino.pack(fill="x", pady=5)
 
-btn_seleccionar_carpeta = tk.Button(google_ads_frame, text="🗂 Select folder",
+btn_seleccionar_carpeta = tk.Button(main_frame, text="🗂 Select folder",
                                     command=seleccionar_carpeta_destino, font=("Arial", 12, "bold"),
                                     bg="white", fg="#1565C0", activebackground="#E3F2FD",
                                     activeforeground="#1565C0", relief="flat", padx=10, pady=5, borderwidth=0)
 btn_seleccionar_carpeta.pack(pady=5)
 
-
-ai_suggestion_check = ttk.Checkbutton(checkbox_frame, text="AI keyword suggestion:", variable=ai_suggestion_var)
-ai_suggestion_check.pack(side="left", padx=10)
-
-consolidated_check = ttk.Checkbutton(checkbox_frame, text="Consolidated:", variable=consolidated_var)
-consolidated_check.pack(side="left", padx=10)
-
-btn_iniciar = tk.Button(google_ads_frame, text="✅ Process", command=iniciar_automatizacion, font=("Arial", 12, "bold"), bg="#1565C0", fg="white", activebackground="#0D47A1", activeforeground="white", relief="raised", padx=10, pady=5, borderwidth=2)
+btn_iniciar = tk.Button(main_frame, text="✅ Process", command=iniciar_automatizacion, font=("Arial", 12, "bold"),
+                        bg="#1565C0", fg="white", activebackground="#0D47A1", activeforeground="white",
+                        relief="raised", padx=10, pady=5, borderwidth=2)
 btn_iniciar.pack(pady=10)
 
 root.mainloop()

@@ -1,4 +1,4 @@
-from mysql_connection import get_mysql_connection
+from db.mysql_connection import get_mysql_connection
 from mysql.connector import Error
 import logging
 from typing import List, Dict, Optional

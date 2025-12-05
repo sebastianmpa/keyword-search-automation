@@ -184,7 +184,7 @@ def cerrar_navegador(driver):
 
 def login_automation_with_cookies(cookie_file=None):
     if cookie_file is None:
-        cookie_file = r"C:\scripts\programatic_seo\scripts_automation\new_account_cookies.pkl"
+        cookie_file = r"C:\scripts\keyword-search-automation\new_account_cookies.pkl"
     driver, wait = iniciar_driver()
     driver.get("https://ads.google.com")  # Abre el dominio raíz primero
 
@@ -195,10 +195,11 @@ def login_automation_with_cookies(cookie_file=None):
             cookie.pop('sameSite', None)
             try:
                 driver.add_cookie(cookie)
-            except Exception as e:
-                print(f"⚠️ No se pudo agregar la cookie: {cookie.get('name')} - {e}")
+            except Exception:
+                # Silenciar errores de cookies con domain mismatch - son esperados y no afectan la autenticación
+                pass
 
-    driver.get("https://ads.google.com/aw/campaigns?ocid=6878459735&euid=1390636465&__u=7102183785&uscid=6878459735&__c=5101490015&authuser=1&workspaceId=0&subid=us-en-awhp-g-aw-c-home-signin-bgc!o2-ahpm-0000000188-0000000001%7C-ahpm-0000000179-0000000001%7C-ahpm-0000000182-0000000001")  # Ahora sí, ve a la página deseada
+    driver.get("https://ads.google.com/aw/campaigns?ocid=6878459735&euid=1390636465&__u=7102183785&uscid=6878459735&__c=5101490015&authuser=0&pli=1")  # Ahora sí, ve a la página deseada
     time.sleep(5)
 
     print("✅ Login con cookies realizado. Google Ads debería estar autenticado.")
