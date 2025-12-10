@@ -151,7 +151,7 @@ def descargar_keywords_pygui():
         print("🖱️ Moviendo el cursor y haciendo clic en el botón de descarga...")
 
         # 📍 Definir coordenadas del botón en la pantalla
-        x, y = 1331, 280  # Ajusta estas coordenadas según tu pantalla
+        x, y = 1538, 260  # Ajusta estas coordenadas según tu pantalla
 
         # 🔍 Mover el cursor a la posición
         pyautogui.moveTo(x, y, duration=1)
@@ -160,11 +160,10 @@ def descargar_keywords_pygui():
         pyautogui.mouseDown()  # Presionar clic
         time.sleep(0.01)  # Esperar un poco
         pyautogui.mouseUp()  # Soltar clic
+        time.sleep(3)  # Esperar un poco antes de la siguiente acción
+        pyautogui.press("enter")
         print(f"✅ Clic simulado con mouseDown/mouseUp en las coordenadas ({x}, {y})")
 
-        
-        # ⏳ Esperar para ver si ocurre el cambio
-        time.sleep(2)
 
         # ⌨️ Enviar Enter para confirmar la acción
         pyautogui.press("enter")
@@ -240,5 +239,6 @@ def keyword_planner_automation(driver, wait, keywords, url=None):
 
 if __name__ == "__main__":
     driver, wait = login_automation()
-    ir_a_keyword_planner2(driver, wait)
+    keywords=["lawn mower", "garden tools"]
+    keyword_planner_automation(driver, wait, keywords, None)
     cerrar_navegador(driver)

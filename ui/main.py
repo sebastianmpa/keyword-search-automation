@@ -98,13 +98,24 @@ def iniciar_automatizacion():
             )
             print(f"   🔑 Keywords generadas: {keywords}")
             
-            # Realizar keyword research en Google Ads y obtener resultado en memoria
+            # Realizar keyword research en Google Ads y descargar CSV
             print(f"   🚀 Ejecutando keyword research para {len(keywords)} keywords...")
-            result_json = keyword_planner_automation(driver, wait, keywords)
-            print(f"   📊 Resultado keyword research: {type(result_json)}")
+            keyword_planner_automation(driver, wait, keywords)
+            print(f"   ⏳ Esperando 10 segundos para que el archivo se descargue...")
+            time.sleep(10)  # Esperar a que el archivo se descargue completamente
             
+            # Procesar el CSV descargado y obtener JSON en memoria
+            print(f"   📊 Procesando CSV descargado...")
+            result_json = merge_csv_files(1, destination_folder, "keyword_research", return_json=True)
+            print(f"   📊 Resultado keyword research: Tipo={type(result_json)}, Cantidad={len(result_json) if isinstance(result_json, list) else 'N/A'}")
+            if isinstance(result_json, list) and result_json:
+                print(f"   📊 Primer keyword de ejemplo: {result_json[0]}")
+            elif result_json is None:
+                print(f"   ⚠️ merge_csv_files devolvió None - revisar logs de merge_csv")
+            time.sleep(2)
             # Insertar en BD inmediatamente con los datos del keyword research
-            if isinstance(result_json, list):
+            print(result_json)
+            if isinstance(result_json, list) and result_json:
                 print(f"   💾 Insertando {len(result_json)} keywords en BD...")
                 for kw_data in result_json:
                     doc = {
@@ -113,13 +124,14 @@ def iniciar_automatizacion():
                         "model": item.get("model", ""),
                         "part_type": item.get("part_type", ""),
                         "keyword": kw_data.get("Keyword", ""),
-                        "volume": kw_data.get("Avg_monthly_searches", 0)
+                        "volume": int(kw_data.get("Avg_monthly_searches", 0))
                     }
+                    print(doc)
                     insert_model_keyword(doc)
                     processed_keywords += 1
                 print(f"   ✅ Keywords insertadas. Total procesadas: {processed_keywords}")
             else:
-                print(f"   ⚠️ result_json no es una lista, se omite inserción")
+                print(f"   ⚠️ result_json vacío o inválido, se omite inserción")
     
     print(f"\n🏁 Loop de productos completado. Total productos procesados: {product_count}")
     cerrar_navegador(driver)

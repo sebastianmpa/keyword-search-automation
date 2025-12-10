@@ -27,6 +27,9 @@ def generate_combinations(part_type: str, brand: str, model: str, sku: str) -> l
         f"{model} {brand} {part_type}",
         f"{brand} {sku}",
         f"{sku} {brand}",
+        f"{brand} {model}",
+        f"{brand} {part_type}",
+        f"{part_type} {brand}",
     ]
     return combinations
 
